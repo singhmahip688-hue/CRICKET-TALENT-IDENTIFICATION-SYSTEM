@@ -1,42 +1,63 @@
-🏏 AI Cricket Talent Identification System
-🚀 Final Year Project | AI + ML + Deep Learning
-This project is an end-to-end intelligent system designed to identify and rank cricket talent using Machine Learning (Random Forest) for statistical data and Deep Learning (CNN) for image-based action analysis.
-🌐 Live DemoYou can access the live dashboard here:
-https://cricket-talent-identification-system-pqcvahy8h56ujuncwp4m89.streamlit.app/
-📖 Table of Contents
-Features
-Tech Stack
-System Architecture
-Installation
-Screenshots
-✨ Features
-Statistical Talent Scoring: Uses a Random Forest Regressor to analyze player performance (Runs, Strike Rate, Wickets, Economy) and provide a "Talent Score."
-Action Recognition: A Convolutional Neural Network (CNN) built with TensorFlow/Keras to analyze player images and action shots.
-Player Comparison: Side-by-side visual analytics to compare two players' strengths and weaknesses.
-Interactive Dashboard: Built with Streamlit for a clean, user-friendly professional interface.
-🛠 Tech Stack
-Frontend: Streamlit (Python-based Web Framework)
-Machine Learning: Scikit-learn (Random Forest)
-Deep Learning: TensorFlow & Keras (CNN)
-Data Handling: Pandas & NumPy
-Visualization: Matplotlib
-🏗 System Architecture
-Data Input: CSV upload for statistics or Image upload for action analysis.
-Preprocessing: Normalization of cricket stats and image resizing ($64 \times 64$) for the CNN.
-Processing:
-        ML Pipeline: Feature extraction $\rightarrow$ Random Forest Prediction.
-        DL Pipeline: Conv2D Layers - Max Pooling - Dense Layer Output.
-Output: Live Leaderboards, Comparison Graphs, and AI Talent Ratings.
-🚀 Installation & Local Setup
-Clone the repository
-Bash
-https://github.com/singhmahip688-hue/CRICKET-TALENT-IDENTIFICATION-SYSTEM.git        
-cd CRICKET-TALENT-IDENTIFICATION SYSTEM
-Install dependencies
-Bash
-        pip install -r requirements.txt
-Run the App
-Bash
-        streamlit run app.py
-👥 Author
-MAHIP SINGH - Final Year Information Science Engineering Student At Sir. M Visvesvaraya Institute Of Technology
+# 🏏 AI Cricket Talent Identification System
+## 🚀 Final Year Project | AI + ML + Deep Learning
+
+This project is an end-to-end intelligent system designed to identify and rank cricket talent using Machine Learning and Deep Learning.
+
+---
+
+### 🌐 Live Demo
+You can access the live dashboard here:
+👉 [Click here to view the App](https://cricket-talent-identification-system-pqcvahy8h56ujuncwp4m89.streamlit.app/)
+
+---
+
+### 📋 Table of Contents
+* [Features](#-features)
+* [Tech Stack](#-tech-stack)
+* [System Architecture](#-system-architecture)
+* [Installation](#-installation)
+
+---
+
+### ✨ Features
+* **Statistical Talent Scoring**: Uses a **Random Forest Regressor** to analyze player performance metrics (Runs, Strike Rate, Wickets, Economy).
+* **Action Recognition**: A **Convolutional Neural Network (CNN)** built with TensorFlow to analyze player images.
+* **Visual Analytics**: Interactive graphs and side-by-side player comparisons.
+
+---
+
+### 🛠 Tech Stack
+* **Frontend**: Streamlit
+* **Machine Learning**: Scikit-learn
+* **Deep Learning**: TensorFlow & Keras
+* **Data Processing**: Pandas & NumPy
+* **Visualization**: Matplotlib
+
+---
+
+### 🏗 System Architecture
+1. **Data Input**: CSV upload for stats or Image upload for CNN analysis.
+2. **Preprocessing**: Data normalization and image resizing ($64 \times 64$).
+3. **Modeling**: 
+   - **ML**: Random Forest Pipeline.
+   - **DL**: Conv2D -> Max Pooling -> Dense Layers.
+4. **Output**: Live Leaderboards and AI Talent Ratings.
+
+---
+
+### 🚀 Installation & Local Setup
+
+```bash
+# Clone the repository
+git clone [https://github.com/singhmahip688-hue/CRICKET-TALENT-IDENTIFICATION-SYSTEM.git](https://github.com/singhmahip688-hue/CRICKET-TALENT-IDENTIFICATION-SYSTEM.git)
+
+# Enter the directory
+cd CRICKET-TALENT-IDENTIFICATION-SYSTEM
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+streamlit run app.py
+
+
