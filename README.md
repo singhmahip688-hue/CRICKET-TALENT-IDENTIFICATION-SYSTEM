@@ -30,8 +30,8 @@ Output: Live Leaderboards, Comparison Graphs, and AI Talent Ratings.
 🚀 Installation & Local Setup
 Clone the repository
 Bash
-        
-cd your-repo-name
+https://github.com/singhmahip688-hue/CRICKET-TALENT-IDENTIFICATION-SYSTEM.git        
+cd CRICKET-TALENT-IDENTIFICATION SYSTEM
 Install dependencies
 Bash
         pip install -r requirements.txt
