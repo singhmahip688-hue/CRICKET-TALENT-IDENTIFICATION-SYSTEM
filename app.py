@@ -4,269 +4,277 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
-from PIL import Image
-import tensorflow as tf
-from tensorflow.keras import layers, models
+import cv2
 
-# ---------------- UI STYLE (FIXED FOR VISIBILITY) ----------------
-st.set_page_config(page_title="AI Cricket Talent System", layout="wide")
+# Import modern MediaPipe Tasks modules
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 
-st.markdown("""
-<style>
-    /* Light Background Gradient */
-    .stApp {
-        background: linear-gradient(to bottom, #f0f2f6, #ffffff);
-    }
-    
-    /* Title and Header Colors - Deep Navy for visibility */
-    h1, h2, h3, .stMarkdown {
-        color: #1e3a8a !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
+# Set up global page config
+st.set_page_config(page_title="Cricket Talent Analytics", layout="wide")
+st.title("🏏 Cricket Talent & Pose Analytics Dashboard")
 
-    /* Subheader specific fix */
-    .st-emotion-cache-10trblm {
-        color: #1e3a8a;
-    }
-
-    /* Making all standard text dark gray/black */
-    p, span, label {
-        color: #333333 !important;
-    }
-
-    /* Metric Box Styling - Light mode */
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #d1d5db;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    /* File Uploader styling */
-    .stFileUploader {
-        background-color: #ffffff;
-        padding: 10px;
-        border-radius: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🏏 AI Cricket Talent Identification System")
-st.markdown("### 🚀 Final Year AI + ML + Deep Learning Project")
-
-# ---------------- NORMALIZATION ----------------
+# ----------------------------------------------------------------
+# HELPER FUNCTIONS & ANGLE CALCULATIONS
+# ----------------------------------------------------------------
 def normalize(series, invert=False):
+    """Safely normalizes numeric pandas series to a 0-1 scale."""
     series = pd.to_numeric(series, errors='coerce').fillna(0)
-
     if series.max() == series.min():
-        return pd.Series([0]*len(series))
-
+        return pd.Series([0.0] * len(series))
+    
     norm = (series - series.min()) / (series.max() - series.min())
-    return 1 - norm if invert else norm
+    return 1.0 - norm if invert else norm
 
-# ---------------- CNN MODEL ----------------
-@st.cache_resource
-def build_cnn():
-    model = models.Sequential([
-        layers.Conv2D(32, (3,3), activation='relu', input_shape=(64,64,3)),
-        layers.MaxPooling2D(2,2),
+def calculate_angle(a, b, c):
+    """Calculates the angle between three points (dictionaries with x,y)."""
+    a_vec = np.array([a['x'], a['y']])
+    b_vec = np.array([b['x'], b['y']])  # Vertex
+    c_vec = np.array([c['x'], c['y']])
+    
+    radians = np.arctan2(c_vec[1]-b_vec[1], c_vec[0]-b_vec[0]) - np.arctan2(a_vec[1]-b_vec[1], a_vec[0]-b_vec[0])
+    angle = np.abs(radians * 180.0 / np.pi)
+    
+    if angle > 180.0:
+        angle = 360.0 - angle
+    return angle
 
-        layers.Conv2D(64, (3,3), activation='relu'),
-        layers.MaxPooling2D(2,2),
-
-        layers.Flatten(),
-        layers.Dense(64, activation='relu'),
-        layers.Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mse')
-    return model
-
-cnn_model = build_cnn()
-
-# ---------------- FILE UPLOAD ----------------
-uploaded_file = st.file_uploader("📂 Upload Dataset", type=["csv"])
+# ----------------------------------------------------------------
+# TAB 1: CSV DATA TALENT ANALYTICS
+# ----------------------------------------------------------------
+st.header("📊 Tabular Performance Analytics")
+uploaded_file = st.file_uploader("📂 Upload Performance CSV Dataset", type=["csv"], key="csv_mesh")
 
 if uploaded_file:
-
     df = pd.read_csv(uploaded_file)
-    df.columns = df.columns.str.strip()
 
-    df.rename(columns={
-        "Wkts": "Wickets",
-        "SR": "Strike_Rate",
+    # Clean and Standardize Columns
+    df.columns = df.columns.str.strip().str.lower()
+    column_mapping = {
+        "player": "Player",
+        "runs": "Runs",
+        "wkts": "Wickets",
+        "wickets": "Wickets",
+        "sr": "Strike_Rate",
+        "strike_rate": "Strike_Rate",
+        "strike rate": "Strike_Rate",
+        "econ": "Econ",
+        "economy": "Econ",
         "4s": "Fours",
         "6s": "Sixes"
-    }, inplace=True)
-
+    }
+    df.rename(columns=column_mapping, inplace=True)
     df = df.replace("-", 0).fillna(0)
 
     st.subheader("📊 Dataset Preview")
     st.dataframe(df.head(), use_container_width=True)
 
-    # ---------------- TYPE DETECTION ----------------
+    # Segmentation Logic
     is_bowling = "Wickets" in df.columns and "Runs" not in df.columns
     is_batting = "Runs" in df.columns and "Wickets" not in df.columns
 
-    # ---------------- BATTING ----------------
+    # Process Batting Matrix
     batting_scores = []
     if not is_bowling:
         if "Runs" in df.columns:
             batting_scores.append(normalize(df["Runs"]))
-
         if "Strike_Rate" in df.columns:
             sr = pd.to_numeric(df["Strike_Rate"], errors='coerce').fillna(0)
             sr_filtered = sr.where(sr >= 100, 0)
             if sr_filtered.sum() > 0:
                 batting_scores.append(normalize(sr_filtered))
 
-    df["Batting_Talent"] = np.mean(batting_scores, axis=0)*100 if batting_scores else 0
+    df["Batting_Talent"] = np.mean(batting_scores, axis=0) * 100 if batting_scores else 0.0
 
-    # ---------------- BOWLING ----------------
+    # Process Bowling Matrix
     bowling_scores = []
     if not is_batting:
         if "Wickets" in df.columns:
             bowling_scores.append(normalize(df["Wickets"]))
-
         if "Econ" in df.columns:
             bowling_scores.append(normalize(df["Econ"], invert=True))
 
-    df["Bowling_Talent"] = np.mean(bowling_scores, axis=0)*100 if bowling_scores else 0
+    df["Bowling_Talent"] = np.mean(bowling_scores, axis=0) * 100 if bowling_scores else 0.0
 
-    # ---------------- FINAL SCORE ----------------
-    def compute(row):
-        bat, bowl = row["Batting_Talent"], row["Bowling_Talent"]
+    # Composite Score Derivation
+    def compute_talent(row):
+        bat = row["Batting_Talent"]
+        bowl = row["Bowling_Talent"]
+        if bat == 0: return bowl
+        if bowl == 0: return bat
+        return 0.5 * bat + 0.5 * bowl
 
-        if bat == 0:
-            return bowl
-        elif bowl == 0:
-            return bat
-        else:
-            return 0.5*bat + 0.5*bowl
+    df["Talent_Score"] = df.apply(compute_talent, axis=1)
 
-    df["Talent_Score"] = df.apply(compute, axis=1)
+    # Machine Learning Regression Engine
+    features = [col for col in ["Runs", "Strike_Rate", "Wickets", "Econ"] if col in df.columns]
+    
+    if features:
+        X = df[features].apply(pd.to_numeric, errors='coerce').fillna(0)
+        y = df["Talent_Score"]
 
-    # ---------------- ML MODEL ----------------
-    features = []
-    for col in ["Runs","Strike_Rate","Wickets","Econ"]:
-        if col in df.columns:
-            features.append(col)
+        model = RandomForestRegressor(n_estimators=200, random_state=42)
+        model.fit(X, y)
+        df["ML_Score"] = model.predict(X)
 
-    X = df[features].apply(pd.to_numeric, errors='coerce').fillna(0)
-    y = df["Talent_Score"]
+        # Model Evaluation Metrics
+        st.subheader("📈 Model Performance Metrics")
+        m_col1, m_col2 = st.columns(2)
+        with m_col1:
+            st.metric("Model R² Score", round(r2_score(y, df["ML_Score"]), 3))
+        with m_col2:
+            st.metric("Mean Absolute Error (MAE)", round(mean_absolute_error(y, df["ML_Score"]), 3))
 
-    model = RandomForestRegressor(n_estimators=200)
-    model.fit(X, y)
+        # Leaderboard
+        st.subheader("🏆 Predictive Performance Leaderboard (Top 10)")
+        top_df = df.sort_values("ML_Score", ascending=False).head(10)
+        st.dataframe(top_df, use_container_width=True)
 
-    df["ML_Score"] = model.predict(X)
+        # Interactive Explorer
+        st.subheader("📋 Complete Scout Database")
+        sort_option = st.selectbox(
+            "Prioritize Column Rank By:",
+            ["ML_Score", "Talent_Score", "Batting_Talent", "Bowling_Talent"]
+        )
+        full_df = df.sort_values(sort_option, ascending=False)
+        st.dataframe(full_df, use_container_width=True, height=300)
 
-    # ==============================
-    # 📊 MODEL EVALUATION
-    # ==============================
-    st.subheader("📊 Model Evaluation")
+        # Export Capability
+        csv_data = full_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Export Analytics Report (.CSV)", csv_data, "cricket_talent_report.csv", "text/csv")
 
-    col1, col2 = st.columns(2)
+        # Visual Plot Implementations
+        st.subheader("📊 Visual Distribution Analytics")
+        g_col1, g_col2 = st.columns(2)
+        
+        with g_col1:
+            st.markdown("**Top 10 Roster Talent Distribution**")
+            fig, ax = plt.subplots(figsize=(6, 3.8))
+            ax.bar(top_df["Player"], top_df["ML_Score"], color='#1e3a8a')
+            plt.xticks(rotation=45, ha='right', fontsize=8)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
 
-    with col1:
-        r2 = r2_score(y, df["ML_Score"])
-        st.metric("R² Score", round(r2,3))
+        with g_col2:
+            st.markdown("**Dynamic Player Head-to-Head Comparison**")
+            p1 = st.selectbox("Select Athlete 1", df["Player"].unique(), index=0)
+            p2 = st.selectbox("Select Athlete 2", df["Player"].unique(), index=min(1, len(df["Player"].unique())-1))
+            
+            row1 = df[df["Player"] == p1].iloc[0]
+            row2 = df[df["Player"] == p2].iloc[0]
+            
+            categories = ["Batting", "Bowling", "ML Score"]
+            val1 = [row1["Batting_Talent"], row1["Bowling_Talent"], row1["ML_Score"]]
+            val2 = [row2["Batting_Talent"], row2["Bowling_Talent"], row2["ML_Score"]]
+            
+            x_axis = np.arange(len(categories))
+            width = 0.35
+            
+            fig2, ax2 = plt.subplots(figsize=(6, 3.8))
+            ax2.bar(x_axis - width/2, val1, width, label=p1, color='#1e3a8a')
+            ax2.bar(x_axis + width/2, val2, width, label=p2, color='#3b82f6')
+            ax2.set_xticks(x_axis)
+            ax2.set_xticklabels(categories)
+            ax2.legend()
+            plt.tight_layout()
+            st.pyplot(fig2)
+            plt.close()
+            
+    else:
+        st.error("The uploaded CSV file does not contain mandatory statistical parameters.")
 
-    with col2:
-        mae = mean_absolute_error(y, df["ML_Score"])
-        st.metric("MAE Error", round(mae,3))
+# ----------------------------------------------------------------
+# TAB 2: BIOMECHANICAL POSE TALENT SCOUT (MODERN TASKS API)
+# ----------------------------------------------------------------
+st.markdown("---")
+st.header("📸 Biomechanical Posture & Mechanics Identification")
+st.markdown("Upload a dynamic cricket action photograph to map skeletal angles and analyze current posture setup mechanics.")
 
-    # ==============================
-    # 🏆 TOP PLAYERS
-    # ==============================
-    st.subheader("🏆 Top Players")
-    top_df = df.sort_values("ML_Score", ascending=False).head(10)
-    st.dataframe(top_df, use_container_width=True)
-
-    # ==============================
-    # 📊 FULL DATASET
-    # ==============================
-    st.subheader("📋 Full Dataset (All Players)")
-
-    sort_option = st.selectbox(
-        "Sort Full Dataset By",
-        ["ML_Score", "Talent_Score", "Batting_Talent", "Bowling_Talent"]
-    )
-
-    full_df = df.sort_values(sort_option, ascending=False)
-
-    st.dataframe(full_df, use_container_width=True, height=400)
-
-    csv = full_df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Full Dataset", csv, "full_player_data.csv")
-
-    # ==============================
-    # 📊 GRAPH
-    # ==============================
-    st.subheader("📊 Top Players Graph")
-
-    fig, ax = plt.subplots(figsize=(8,4))
-    ax.bar(top_df["Player"], top_df["ML_Score"], color='#1e3a8a') # Navy bars
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    st.pyplot(fig)
-
-    # ==============================
-    # ⚔ PLAYER COMPARISON
-    # ==============================
-    st.subheader("⚔ Player Comparison")
-
-    p1 = st.selectbox("Player 1", df["Player"].unique())
-    p2 = st.selectbox("Player 2", df["Player"].unique())
-
-    row1 = df[df["Player"] == p1].iloc[0]
-    row2 = df[df["Player"] == p2].iloc[0]
-
-    categories = ["Batting", "Bowling", "ML Score"]
-
-    val1 = [row1["Batting_Talent"], row1["Bowling_Talent"], row1["ML_Score"]]
-    val2 = [row2["Batting_Talent"], row2["Bowling_Talent"], row2["ML_Score"]]
-
-    x = np.arange(len(categories))
-    width = 0.3
-
-    fig2, ax2 = plt.subplots(figsize=(6,4))
-    ax2.bar(x - width/2, val1, width, label=p1, color='#1e3a8a')
-    ax2.bar(x + width/2, val2, width, label=p2, color='#3b82f6')
-
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(categories)
-    ax2.legend()
-
-    plt.tight_layout()
-    st.pyplot(fig2)
-
-    # ==============================
-    # 📊 PLAYER BREAKDOWN
-    # ==============================
-    st.subheader("📊 Player Breakdown")
-
-    selected = st.selectbox("Select Player", df["Player"].unique())
-    row = df[df["Player"] == selected].iloc[0]
-
-    fig3, ax3 = plt.subplots(figsize=(5,3))
-    ax3.bar(["Batting","Bowling"], [row["Batting_Talent"], row["Bowling_Talent"]], color=['#1e3a8a', '#3b82f6'])
-    plt.tight_layout()
-    st.pyplot(fig3)
-
-# ==============================
-# 📸 IMAGE SECTION
-# ==============================
-st.subheader("📸 Image Talent")
-
-image_file = st.file_uploader("Upload Image", type=["jpg","png"])
-
-def preprocess(img):
-    image = Image.open(img).convert("RGB")
-    image = image.resize((64,64))
-    image = np.array(image)/255.0
-    return np.expand_dims(image, axis=0)
+image_file = st.file_uploader("Upload Player Biomechanics Profile Image", type=["jpg", "png", "jpeg"], key="img_mesh")
 
 if image_file:
-    img = preprocess(image_file)
-    score = cnn_model.predict(img)[0][0]
-    st.success(f"🎯 Image Talent Score: {round(score,2)}")
+    file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
+    cv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    h, w, _ = cv_img.shape
+    
+    temp_img_path = "temp_scout_frame.jpg"
+    cv2.imwrite(temp_img_path, cv_img)
+    
+    mp_image = mp.Image.create_from_file(temp_img_path)
+    
+    try:
+        base_options = python.BaseOptions(model_asset_path='pose_landmarker.task')
+        options = vision.PoseLandmarkerOptions(
+            base_options=base_options,
+            output_segmentation_masks=False
+        )
+        
+        with vision.PoseLandmarker.create_from_options(options) as landmarker:
+            detection_result = landmarker.detect(mp_image)
+            
+            if detection_result.pose_landmarks:
+                landmarks = detection_result.pose_landmarks[0]
+                
+                LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST, LEFT_HIP = 11, 13, 15, 23
+                
+                shoulder = {'x': landmarks[LEFT_SHOULDER].x, 'y': landmarks[LEFT_SHOULDER].y}
+                elbow = {'x': landmarks[LEFT_ELBOW].x, 'y': landmarks[LEFT_ELBOW].y}
+                wrist = {'x': landmarks[LEFT_WRIST].x, 'y': landmarks[LEFT_WRIST].y}
+                hip = {'x': landmarks[LEFT_HIP].x, 'y': landmarks[LEFT_HIP].y}
+                
+                trunk_angle = calculate_angle(shoulder, hip, {'x': hip['x'], 'y': 0.0}) 
+                arm_extension = calculate_angle(shoulder, elbow, wrist) 
+                
+                spine_score = max(0, 100 - abs(20 - trunk_angle) * 2)
+                extension_score = (arm_extension / 180.0) * 100
+                composite_form_score = round((0.4 * spine_score) + (0.6 * extension_score), 2)
+                
+                for lm in landmarks:
+                    cx, cy = int(lm.x * w), int(lm.y * h)
+                    cv2.circle(cv_img, (cx, cy), 4, (245, 117, 66), -1)
+                
+                pt_shoulder = (int(landmarks[LEFT_SHOULDER].x * w), int(landmarks[LEFT_SHOULDER].y * h))
+                pt_elbow = (int(landmarks[LEFT_ELBOW].x * w), int(landmarks[LEFT_ELBOW].y * h))
+                pt_wrist = (int(landmarks[LEFT_WRIST].x * w), int(landmarks[LEFT_WRIST].y * h))
+                pt_hip = (int(landmarks[LEFT_HIP].x * w), int(landmarks[LEFT_HIP].y * h))
+                
+                cv2.line(cv_img, pt_shoulder, pt_elbow, (245, 66, 230), 2)
+                cv2.line(cv_img, pt_elbow, pt_wrist, (245, 66, 230), 2)
+                cv2.line(cv_img, pt_shoulder, pt_hip, (246, 82, 59), 2)  
+                
+                ui_col1, ui_col2 = st.columns([3, 2])
+                
+                with ui_col1:
+                    annotated_rgb = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+                    st.image(annotated_rgb, caption="Biomechanical Frame Mapping Analytics", use_container_width=True)
+                    
+                with ui_col2:
+                    st.success("✅ Kinematic Pose Structural Check Complete")
+                    st.metric("🎯 Pose Performance Alignment Score", f"{min(composite_form_score, 100.0)} / 100")
+                    
+                    # --- UPDATED CRICKET SCORING SYSTEM LOGIC ---
+                    if composite_form_score >= 70.0:
+                        st.success("🏆 **result:** Excellent batsmen")
+                    elif composite_form_score >= 60.0:
+                        st.info("📈 **result:** Average batsmen")
+                    elif composite_form_score >= 50.0:
+                        st.warning("⚠️ **result:** Need Improvement in Techniques: Good batsmen")
+                    else:
+                        st.error("🚨 **result:** Mechanical Adjustments Required")
+                    
+                    st.markdown("### 🧬 Segment Calibration Data")
+                    st.write(f"**Trunk Spine Deviation Tilt Angle:** {round(trunk_angle, 1)}°")
+                    st.write(f"**Elbow Position Extension Radius:** {round(arm_extension, 1)}°")
+                    
+                    st.markdown("### 📋 Automation Coaching Insights")
+                    if arm_extension < 130:
+                        st.warning("⚠️ **Form Warning:** Marginal arm extension flag. Extend the front elbow through the target plane path during ball release/impact steps.")
+                    else:
+                        st.info("💎 **Form Match:** Clean technical structure. Player maintains linear extension metrics across target vectors.")
+            else:
+                st.error("❌ MediaPipe loaded successfully, but could not detect a clear human form outline in the image. Please use a closer, well-lit action shot.")
+                
+    except Exception as e:
+        st.error(f"Failed to load standard pose asset model. Ensure the 'pose_landmarker.task' file is downloaded inside your root folder. Details: {e}")
