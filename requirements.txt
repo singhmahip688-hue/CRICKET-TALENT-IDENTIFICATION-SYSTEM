@@ -1,7 +1,8 @@
 streamlit
-numpy
+numpy<2.0.0
 pandas
 matplotlib
 scikit-learn
 opencv-python-headless
 mediapipe==0.10.14
+protobuf==4.25.3
